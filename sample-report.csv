@@ -1,6 +1,6 @@
 ####### ELECTION INFO ########
-Election Name,Sample Prez Primary
-State,MI
+Election Name,State
+Sample Prez Primary,MI
 
 ####### CONTESTS ########
 Contest Name,Targeted?,Number of Winners,Votes Allowed,Total Ballots Cast,Tabulated Votes
@@ -8,10 +8,8 @@ POTUS (DEM),Targeted,1,1,2271110,Bennet: 1532; Biden: 838564; Bloomberg: 73175; 
 POTUS (Rep),Opportunistic,1,1,2271110,Sanford: 4258; Trump: 640522; Uncommitted: 28485; Walsh: 4067; Weld: 6099
 
 ####### AUDIT SETTINGS ########
-Audit Name,ThursdayTest
-Risk Limit,10%
-Random Seed,12345123451234512345
-Online Data Entry?,Yes
+Audit Name,Risk Limit,Random Seed,Online Data Entry?
+ThursdayTest,10%,12345123451234512345,Yes
 
 ####### AUDIT BOARDS ########
 Jurisdiction Name,Audit Board Name,Member 1 Name,Member 1 Affiliation,Member 2 Name,Member 2 Affiliation
