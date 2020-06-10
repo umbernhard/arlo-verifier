@@ -6,6 +6,7 @@ custom formats, we can't rely on other parsers.
 import sys
 import csv
 import itertools
+import random
 
 def parse(filename):
     """
@@ -76,7 +77,7 @@ def compute_diluted_margin(contest):
 
     return worst_winner[0], best_loser[0], winners, losers, margin
 
-def process_ballots(ballots, contests, risk_limit, rnd_num):
+def process_ballots(ballots, contests, risk_limit ):
     """
     Processes the ballots for the contests, computing p-values
     """
@@ -85,8 +86,12 @@ def process_ballots(ballots, contests, risk_limit, rnd_num):
     mapped_ballots = {}
     for ballot in ballots:
         ticket_numbers = ballot['Ticket Numbers'].split(':')[-1].strip().split(',')
+
         for number in ticket_numbers:
+            if float(number) in mapped_ballots:
+                number = float(number) + 10**-10
             mapped_ballots[float(number)] = ballot
+
 
     # Set up test statistics
     T = {}
@@ -99,9 +104,15 @@ def process_ballots(ballots, contests, risk_limit, rnd_num):
 
     winner_names = {}
     loser_names = {}
+
+
+    sample_results = {}
     for c in contests:
         contest = c['Contest Name']
         ww, bl, winners[contest], losers[contest], margin = compute_diluted_margin(c)
+
+
+        sample_results[contest] = {}
 
         winner_names[contest] = [w[0] for w in winners[contest]]
         loser_names[contest] = [w[0] for w in losers[contest]]
@@ -120,16 +131,47 @@ def process_ballots(ballots, contests, risk_limit, rnd_num):
                 S_wl[contest][winner[0]][loser[0]] = (winner[1])/(loser[1] +
                         winner[1])
 
-    is_finished = False
+    is_finished = {}
+    for c in contests:
+        contest = c['Contest Name']
+        is_finished[contest] = False
+
     ctr = 0
+
+
     for ballot in sorted(mapped_ballots):
+        fake = {}
         if mapped_ballots[ballot]['Audited?'] != 'AUDITED':
-            continue
+            print('found not audited ballots')
+            for c in contests:
+                contest = c['Contest Name']
+               # fake[contest]= winners[contest][0][0]    # losers[contest][0][0]
+                flip = random.random()
+                if flip  < .379:
+                    fake[contest] = winners[contest][0][0]
+                elif .379 < flip < .641:
+                    fake[contest] = losers[contest][0][0]
+                else:
+                    fake[contest] = losers[contest][1][0]
+
+        #    continue
+
 
         ctr += 1
         for c in contests:
             contest = c['Contest Name']
-            result = mapped_ballots[ballot][f'Audit Result: {contest}']
+
+            if fake:
+                result = fake[contest]
+            else:
+                result = mapped_ballots[ballot][f'Audit Result: {contest}']
+
+
+            if result in sample_results[contest]:
+                sample_results[contest][result] += 1
+            else:
+                sample_results[contest][result] = 1
+
             if contest not in finished:
                 finished[contest] = set()
 
@@ -158,22 +200,34 @@ def process_ballots(ballots, contests, risk_limit, rnd_num):
             complete_set = itertools.product(\
                                     winner_names[contest],
                                     loser_names[contest])
-            if not is_finished and finished[contest] == set(complete_set):
-                print(f'Could have stopped at {ctr}')
-                is_finished = True
+            if not is_finished[contest] and finished[contest] == set(complete_set):
+                print(f'Could have stopped at {ctr} in {contest}')
+                is_finished[contest] = True
 
 
+    print()
+    for contest in sample_results:
+        print('\tSample results for {}'.format(contest))
+        contained = 0
+        for cand in sample_results[contest]:
+            if not cand:
+                continue
+            print('\t\t{}: {}'.format(cand, sample_results[contest][cand]))
+            contained += sample_results[contest][cand]
+
+        print(f'\t{contained} ballots contained this contest')
+        print()
 
     results = {}
     seq_p = {}
     tot_p = {}
     for contest in T:
-        seq_p[contest]= 100
-        tot_p[contest] = 100
+        seq_p[contest]= 0
+        tot_p[contest] = 0
         for w in T[contest]:
             for l in T[contest][w]:
-                seq_p[contest] = min(seq_p[contest], T[contest][w][l])
-                tot_p[contest] = min(tot_p[contest], total_T[contest][w][l])
+                seq_p[contest] = max(seq_p[contest], 1/T[contest][w][l])
+                tot_p[contest] = max(tot_p[contest], 1/total_T[contest][w][l])
 
     return tot_p, seq_p
 
@@ -228,30 +282,30 @@ def main():
 
         risk_limit = float(parsed['AUDIT SETTINGS'][0]['Risk Limit'].strip('%'))/100
 
+        tot_p, seq_p = process_ballots(
+            parsed['SAMPLED BALLOTS'],
+            parsed['CONTESTS'],
+            risk_limit,
+            )
+
+        print()
+
         for rnd in parsed['ROUNDS']:
             r_num = rnd['Round Number']
-
-            tot_p, seq_p = process_ballots(
-                parsed['SAMPLED BALLOTS'],
-                parsed['CONTESTS'],
-                risk_limit,
-                r_num)
-
-            pval = rnd['P-Value']
+            pval = float(rnd['P-Value'])
             if not pval:
                 pval = 'N/A'
             contest = rnd['Contest Name']
 
-            print('Audit reported p of {} in Round {} for race {}'.format(
+            print('Audit reported p of {:1.4f} in Round {} for race {}'.format(
                 pval,
                 r_num, contest))
 
             print('\tAttained total p of {:1.4f}, sequential p of {:1.4f}'.format(
-                1/tot_p[contest],
-                1/seq_p[contest]))
+                tot_p[contest],
+                seq_p[contest]))
 
             print()
-
 
         print()
 
