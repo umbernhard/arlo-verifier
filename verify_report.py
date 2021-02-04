@@ -140,19 +140,19 @@ def process_ballots(ballots, contests, risk_limit ):
 
 
     for ballot in sorted(mapped_ballots):
-        fake = {}
+        phantom = {}
         if mapped_ballots[ballot]['Audited?'] != 'AUDITED':
-            print('found not audited ballots')
+            print('found not audited ballots, creating phantoms')
             for c in contests:
                 contest = c['Contest Name']
-               # fake[contest]= winners[contest][0][0]    # losers[contest][0][0]
-                flip = random.random()
-                if flip  < .379:
-                    fake[contest] = winners[contest][0][0]
-                elif .379 < flip < .641:
-                    fake[contest] = losers[contest][0][0]
-                else:
-                    fake[contest] = losers[contest][1][0]
+                phantom[contest]= losers[contest][0][0]    # losers[contest][0][0]
+               # flip = random.random()
+               # if flip  < .379:
+               #     phantom[contest] = winners[contest][0][0]
+               # elif .379 < flip < .641:
+               #     phantom[contest] = losers[contest][0][0]
+               # else:
+               #     phantom[contest] = losers[contest][1][0]
 
         #    continue
 
@@ -161,8 +161,8 @@ def process_ballots(ballots, contests, risk_limit ):
         for c in contests:
             contest = c['Contest Name']
 
-            if fake:
-                result = fake[contest]
+            if phantom:
+                result = phantom[contest]
             else:
                 result = mapped_ballots[ballot][f'Audit Result: {contest}']
 
@@ -292,12 +292,17 @@ def main():
 
         for rnd in parsed['ROUNDS']:
             r_num = rnd['Round Number']
-            pval = float(rnd['P-Value'])
-            if not pval:
-                pval = 'N/A'
+            try:
+                pval = float(rnd['P-Value'])
+            except:
+                pval =  None
             contest = rnd['Contest Name']
 
-            print('Audit reported p of {:1.4f} in Round {} for race {}'.format(
+            if not pval:
+                print('Audit did not include a p-value in Round {} for race {}'.format(
+                r_num, contest))
+            else:
+                print('Audit reported p of {:1.4f} in Round {} for race {}'.format(
                 pval,
                 r_num, contest))
 
