@@ -85,12 +85,13 @@ def process_ballots(ballots, contests, risk_limit ):
     # First map all ballots to ticket numbers
     mapped_ballots = {}
     for ballot in ballots:
-        ticket_numbers = ballot['Ticket Numbers'].split(':')[-1].strip().split(',')
+        for contest in contests:
+            ticket_numbers = ballot['Ticket Numbers: ' + contest['Contest Name']].split(':')[-1].strip().split(',')
 
-        for number in ticket_numbers:
-            if float(number) in mapped_ballots:
-                number = float(number) + 10**-10
-            mapped_ballots[float(number)] = ballot
+            for number in ticket_numbers:
+                if float(number) in mapped_ballots:
+                    number = float(number) + 10**-10
+                mapped_ballots[float(number)] = ballot
 
 
     # Set up test statistics
@@ -139,22 +140,24 @@ def process_ballots(ballots, contests, risk_limit ):
     ctr = 0
 
 
+    phantoms = 0
     for ballot in sorted(mapped_ballots):
         phantom = {}
         if mapped_ballots[ballot]['Audited?'] != 'AUDITED':
-            print('found not audited ballots, creating phantoms')
+            phantoms += 1
             for c in contests:
                 contest = c['Contest Name']
-                phantom[contest]= losers[contest][0][0]    # losers[contest][0][0]
-               # flip = random.random()
-               # if flip  < .379:
-               #     phantom[contest] = winners[contest][0][0]
-               # elif .379 < flip < .641:
-               #     phantom[contest] = losers[contest][0][0]
-               # else:
-               #     phantom[contest] = losers[contest][1][0]
+                phantom[contest]= losers[contest][0][0]
 
-        #    continue
+                # this code lets us hypothesize about what the phantoms might be.
+                # Not recommended.
+                #flip = random.random()
+                #if flip  < .506:
+                #    phantom[contest] = winners[contest][0][0]
+                #elif .506 < flip < .985:
+                #    phantom[contest] = losers[contest][0][0]
+                #else:
+                #    phantom[contest] = losers[contest][1][0]
 
 
         ctr += 1
@@ -205,6 +208,7 @@ def process_ballots(ballots, contests, risk_limit ):
                 is_finished[contest] = True
 
 
+    print('{} phantoms were found and turned into zombies.'.format(phantoms))
     print()
     for contest in sample_results:
         print('\tSample results for {}'.format(contest))
@@ -265,6 +269,17 @@ def main():
                 contest['Contest Name'],
                 ['opportunistic', 'targeted'][contest['Targeted?'] == 'Targeted']
                 ))
+
+            for winner in winners:
+                if winner[0] == worst_winner:
+                    print('\t\t\t{:20s}: {} votes (worst winner)'.format(winner[0], winner[1]))
+                else:
+                    print('\t\t\t{:20s}: {} votes'.format(winner[0], winner[1]))
+            for loser in losers:
+                if loser[0] == best_loser:
+                    print('\t\t\t{:20s}: {} votes (best loser)'.format(loser[0], loser[1]))
+                else:
+                    print('\t\t\t{:20s}: {} votes'.format(loser[0], loser[1]))
 
             print('\t\t\tWorst Winner: {:20s}\n\
                          Best Loser: {:20s}\n\
