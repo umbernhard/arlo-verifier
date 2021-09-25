@@ -7,6 +7,7 @@ import sys
 import csv
 import itertools
 import random
+from decimal import Decimal
 
 def parse(filename):
     """
@@ -77,7 +78,7 @@ def compute_diluted_margin(contest):
 
     return worst_winner[0], best_loser[0], winners, losers, margin
 
-def process_ballots(ballots, contests, risk_limit ):
+def process_ballot_polling_ballots(ballots, contests, risk_limit ):
     """
     Processes the ballots for the contests, computing p-values
     """
@@ -235,6 +236,75 @@ def process_ballots(ballots, contests, risk_limit ):
 
     return tot_p, seq_p
 
+def process_ballot_comparison_ballots(ballots, contests, risk_limit ):
+
+
+    tot_p = {}
+    seq_p = {}
+    p = Decimal(1.0)
+    gamma: Decimal = Decimal(1.03905)  # This gamma is used in Stark's tool, AGI, and CORLA
+
+    # This sets the expected number of one-vote misstatements at 1 in 1000
+    o1: Decimal = Decimal(0.001)
+    u1: Decimal = Decimal(0.001)
+
+    # This sets the expected two-vote misstatements at 1 in 10000
+    o2: Decimal = Decimal(0.0001)
+    u2: Decimal = Decimal(0.0001)
+
+    for contest in contests:
+
+        results = {}
+        print(contest)
+        for cand in contest['Tabulated Votes'].split(';'):
+            name = cand.split(':')[0].strip()
+            votes = int(cand.split(':')[1].strip())
+            results[name] = votes
+
+        #contest = c['Contest Name']
+        cn = contest['Contest Name']
+        N = int(contest['Total Ballots Cast'])
+        ww, bl, _, _, diluted_margin = compute_diluted_margin(contest)
+        V = Decimal(diluted_margin * N)
+
+        if diluted_margin == 0:
+            U = Decimal("inf")
+        else:
+            U = 2 * gamma / Decimal(diluted_margin)
+
+
+        for ballot in ballots:
+            if ballot ['Audited?'] != 'AUDITED':
+                continue
+            reported = ballot['CVR Result: ' + cn]
+            audited = ballot['Audit Result: ' + cn]
+
+            V_wl = results[ww] - results[bl]
+
+
+            if reported != audited:
+                if reported == ww and audited == bl:
+                    e = 2.0
+                elif reported != ww and reported != bl and audited == bl:
+                    e = 1.0
+                else:
+                    e = 0
+
+                e_r = e / V_wl
+            else:
+                e_r = 0
+
+            U = 2 * gamma / Decimal(diluted_margin)
+            denom = (2 * gamma) / V
+            p_b = (1 - 1 / U) / (1 - (Decimal(e_r) / denom))
+
+            # TODO fix
+            multiplicity = 1 # ballot['Ticket Numbers: ' + contest]
+            p *= p_b ** multiplicity
+
+        tot_p[cn] = p
+        seq_p[cn]  = p
+    return tot_p, seq_p
 
 def main():
     """
@@ -297,11 +367,25 @@ def main():
 
         risk_limit = float(parsed['AUDIT SETTINGS'][0]['Risk Limit'].strip('%'))/100
 
-        tot_p, seq_p = process_ballots(
-            parsed['SAMPLED BALLOTS'],
-            parsed['CONTESTS'],
-            risk_limit,
-            )
+        audit_type = parsed['AUDIT SETTINGS'][0]['Audit Type']
+
+        if audit_type == 'BALLOT_POLLING':
+            tot_p, seq_p = process_ballot_polling_ballots(
+                parsed['SAMPLED BALLOTS'],
+                parsed['CONTESTS'],
+                risk_limit,
+                )
+        elif audit_type == 'BALLOT_COMPARISON':
+            tot_p, seq_p = process_ballot_comparison_ballots(
+                parsed['SAMPLED BALLOTS'],
+                parsed['CONTESTS'],
+                risk_limit,
+                )
+        else:
+            print('Audit type {} not supported'.format(audit_type))
+            return
+
+
 
         print()
 
@@ -321,7 +405,7 @@ def main():
                 pval,
                 r_num, contest))
 
-            print('\tAttained total p of {:1.4f}, sequential p of {:1.4f}'.format(
+            print('\tAttained total p of {:1.9f}, sequential p of {:1.4f}'.format(
                 tot_p[contest],
                 seq_p[contest]))
 
